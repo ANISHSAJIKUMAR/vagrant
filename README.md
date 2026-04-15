@@ -1,9 +1,9 @@
-# Vagrant VPN Gateway (Terminal-only)
+# WireGuard VPN Gateway
 
 This project creates a headless Ubuntu VM with a WireGuard VPN server.
 All generated connection data is exported to:
 
-`/Users/anishskumar/vagrant-vpn-gateway/connection`
+`/Users/anishskumar/wireguard-vpn-gateway/connection`
 
 ## Prerequisites
 
@@ -24,7 +24,7 @@ All generated connection data is exported to:
 From host terminal:
 
 ```bash
-cd /Users/anishskumar/vagrant-vpn-gateway
+cd /Users/anishskumar/wireguard-vpn-gateway
 export WG_SERVER_PUBLIC_IP="YOUR_PUBLIC_IP_OR_DNS"
 export WG_PORT="51820"
 export WG_DNS="1.1.1.1,8.8.8.8"
@@ -40,7 +40,7 @@ Notes:
 From host terminal:
 
 ```bash
-cd /Users/anishskumar/vagrant-vpn-gateway
+cd /Users/anishskumar/wireguard-vpn-gateway
 ./start_vpn.sh
 ```
 
@@ -64,7 +64,7 @@ Environment variables you can override:
 To stop and clean everything not required:
 
 ```bash
-cd /Users/anishskumar/vagrant-vpn-gateway
+cd /Users/anishskumar/wireguard-vpn-gateway
 ./stop_cleanup_vpn.sh
 ```
 
@@ -78,7 +78,7 @@ cd /Users/anishskumar/vagrant-vpn-gateway
 Simple:
 
 ```bash
-cd /Users/anishskumar/vagrant-vpn-gateway
+cd /Users/anishskumar/wireguard-vpn-gateway
 vagrant ssh
 ```
 
