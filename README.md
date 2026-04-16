@@ -11,3 +11,8 @@ Reusable Vagrant project for reproducible local VM environments.
 - vagrant ssh
 - vagrant halt
 - vagrant destroy -f
+
+## Suggested workflow
+- Update the Vagrantfile or provisioning scripts.
+- Rebuild the VM from scratch to verify the full flow.
+- Refresh the README if the setup steps change.
