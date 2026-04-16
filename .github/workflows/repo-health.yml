@@ -1,0 +1,197 @@
+name: Repo Health Check
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      has_node: ${{ steps.detect.outputs.has_node }}
+      has_python: ${{ steps.detect.outputs.has_python }}
+      has_go: ${{ steps.detect.outputs.has_go }}
+      has_java: ${{ steps.detect.outputs.has_java }}
+      has_terraform: ${{ steps.detect.outputs.has_terraform }}
+      has_docker: ${{ steps.detect.outputs.has_docker }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: detect
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          has_node=false
+          has_python=false
+          has_go=false
+          has_java=false
+          has_terraform=false
+          has_docker=false
+
+          if find . -path './.git' -prune -o \( -name 'package.json' -o -name 'package-lock.json' -o -name 'pnpm-lock.yaml' -o -name 'yarn.lock' \) -print -quit | grep -q .; then
+            has_node=true
+          fi
+          if find . -path './.git' -prune -o \( -name 'pyproject.toml' -o -name 'requirements.txt' -o -name 'requirements-dev.txt' -o -name 'setup.py' -o -name 'setup.cfg' -o -name 'tox.ini' \) -print -quit | grep -q .; then
+            has_python=true
+          fi
+          if [ -f go.mod ] || find . -path './.git' -prune -o -name 'go.mod' -print -quit | grep -q .; then
+            has_go=true
+          fi
+          if find . -path './.git' -prune -o \( -name 'pom.xml' -o -name 'build.gradle' -o -name 'build.gradle.kts' -o -name 'mvnw' -o -name 'gradlew' \) -print -quit | grep -q .; then
+            has_java=true
+          fi
+          if find . -path './.git' -prune -o -name '*.tf' -print -quit | grep -q .; then
+            has_terraform=true
+          fi
+          if find . -path './.git' -prune -o \( -name 'Dockerfile' -o -name 'Dockerfile.*' -o -name 'docker-compose.yml' -o -name 'docker-compose.yaml' \) -print -quit | grep -q .; then
+            has_docker=true
+          fi
+
+          {
+            echo "has_node=$has_node"
+            echo "has_python=$has_python"
+            echo "has_go=$has_go"
+            echo "has_java=$has_java"
+            echo "has_terraform=$has_terraform"
+            echo "has_docker=$has_docker"
+          } >> "$GITHUB_OUTPUT"
+
+  node:
+    needs: detect
+    if: needs.detect.outputs.has_node == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - name: Install dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          corepack enable || true
+          if [ -f package-lock.json ]; then
+            npm ci
+          elif [ -f pnpm-lock.yaml ]; then
+            pnpm install --frozen-lockfile
+          elif [ -f yarn.lock ]; then
+            yarn install --frozen-lockfile
+          else
+            npm install
+          fi
+      - name: Lint, test, build
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run lint --if-present
+          npm run test --if-present
+          npm run build --if-present
+
+  python:
+    needs: detect
+    if: needs.detect.outputs.has_python == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip setuptools wheel pytest
+          if [ -f requirements.txt ]; then
+            python -m pip install -r requirements.txt
+          fi
+          if [ -f requirements-dev.txt ]; then
+            python -m pip install -r requirements-dev.txt
+          fi
+      - name: Test or compile
+        shell: bash
+        run: |
+          set -euo pipefail
+          if find . -path './.git' -prune -o \( -name 'test_*.py' -o -name '*_test.py' -o -path './tests/*' -o -path './test/*' \) -print -quit | grep -q .; then
+            python -m pytest -q
+          else
+            python -m compileall .
+          fi
+
+  go:
+    needs: detect
+    if: needs.detect.outputs.has_go == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+      - name: Test
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test ./...
+
+  java:
+    needs: detect
+    if: needs.detect.outputs.has_java == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+      - name: Build or test
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f mvnw ]; then
+            chmod +x mvnw
+            ./mvnw test
+          elif [ -f pom.xml ]; then
+            mvn test
+          elif [ -f gradlew ]; then
+            chmod +x gradlew
+            ./gradlew test
+          elif [ -f build.gradle ] || [ -f build.gradle.kts ]; then
+            gradle test
+          else
+            echo 'No supported Java build file found.'
+          fi
+
+  terraform:
+    needs: detect
+    if: needs.detect.outputs.has_terraform == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.8.5'
+      - name: Format check
+        run: terraform fmt -check -recursive
+      - name: Init
+        run: terraform init -backend=false
+      - name: Validate
+        run: terraform validate
+
+  docker:
+    needs: detect
+    if: needs.detect.outputs.has_docker == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t repo-health .
